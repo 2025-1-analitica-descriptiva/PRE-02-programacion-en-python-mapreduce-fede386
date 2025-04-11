@@ -1,13 +1,14 @@
-"""Taller evaluable"""
+
 
 # pylint: disable=broad-exception-raised
 
 import fileinput
 import glob
-import os.path
+import os
+import shutil
 import time
+import re
 from itertools import groupby
-
 
 #
 # Escriba la funcion que  genere n copias de los archivos de texto en la
@@ -18,7 +19,15 @@ from itertools import groupby
 # text0_2.txt, etc.
 #
 def copy_raw_files_to_input_folder(n):
-    """Funcion copy_files"""
+    raw_files = glob.glob("files/raw/*.txt")
+    os.makedirs("files/input", exist_ok=True)
+    for i in range(1, n + 1):
+        for file_path in raw_files:
+            file_name = os.path.basename(file_path)
+            name, ext = os.path.splitext(file_name)
+            new_name = f"{name}_{i}{ext}"
+            new_path = os.path.join("files/input", new_name)
+            shutil.copyfile(file_path, new_path)
 
 
 #
@@ -36,8 +45,17 @@ def copy_raw_files_to_input_folder(n):
 #     ('text2.txt'. 'hypotheses.')
 #   ]
 #
+
 def load_input(input_directory):
-    """Funcion load_input"""
+    input_data = []
+    for file_path in glob.glob(f"{input_directory}/*.txt"):
+        file_name = os.path.basename(file_path)
+        with open(file_path, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    input_data.append((file_name, line))
+    return input_data
 
 
 #
@@ -46,8 +64,12 @@ def load_input(input_directory):
 # realiza el preprocesamiento de las líneas de texto,
 #
 def line_preprocessing(sequence):
-    """Line Preprocessing"""
-
+    result = []
+    for file, line in sequence:
+        words = re.findall(r"\b\w+\b", line.lower())  # Normaliza a minúsculas
+        for word in words:
+            result.append((word, 1))
+    return result
 
 #
 # Escriba una función llamada maper que recibe una lista de tuplas de la
@@ -62,7 +84,8 @@ def line_preprocessing(sequence):
 #   ]
 #
 def mapper(sequence):
-    """Mapper"""
+    return sequence  # Ya es [(word, 1)]
+
 
 
 #
@@ -77,7 +100,7 @@ def mapper(sequence):
 #   ]
 #
 def shuffle_and_sort(sequence):
-    """Shuffle and Sort"""
+    return sorted(sequence, key=lambda x: x[0])
 
 
 #
@@ -87,16 +110,22 @@ def shuffle_and_sort(sequence):
 # texto.
 #
 def reducer(sequence):
-    """Reducer"""
+    result = []
+    for key, group in groupby(sequence, key=lambda x: x[0]):
+        total = sum(value for _, value in group)
+        result.append((key, total))
+    return result
 
 
 #
 # Escriba la función create_ouptput_directory que recibe un nombre de
 # directorio y lo crea. Si el directorio existe, lo borra
 #
-def create_ouptput_directory(output_directory):
-    """Create Output Directory"""
 
+def create_ouptput_directory(output_directory):
+    if os.path.exists(output_directory):
+        shutil.rmtree(output_directory)
+    os.makedirs(output_directory)
 
 #
 # Escriba la función save_output, la cual almacena en un archivo de texto
@@ -107,7 +136,10 @@ def create_ouptput_directory(output_directory):
 # separados por un tabulador.
 #
 def save_output(output_directory, sequence):
-    """Save Output"""
+    output_path = os.path.join(output_directory, "part-00000")
+    with open(output_path, "w", encoding="utf-8") as f:
+        for key, value in sequence:
+            f.write(f"{key}\t{value}\n")
 
 
 #
@@ -115,14 +147,21 @@ def save_output(output_directory, sequence):
 # entregado como parámetro.
 #
 def create_marker(output_directory):
-    """Create Marker"""
+    open(os.path.join(output_directory, "_SUCCESS"), "w").close()
 
 
 #
 # Escriba la función job, la cual orquesta las funciones anteriores.
 #
 def run_job(input_directory, output_directory):
-    """Job"""
+    create_ouptput_directory(output_directory)
+    data = load_input(input_directory)
+    preprocessed = line_preprocessing(data)
+    mapped = mapper(preprocessed)
+    sorted_data = shuffle_and_sort(mapped)
+    reduced = reducer(sorted_data)
+    save_output(output_directory, reduced)
+    create_marker(output_directory)
 
 
 if __name__ == "__main__":
